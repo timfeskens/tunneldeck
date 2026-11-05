@@ -19,9 +19,14 @@ Wi-Fi rules fail closed when macOS withholds the SSID. Automatic activation
 is not a kill switch and does not establish that traffic reached the peer.
 
 Do not share real private keys, preshared keys, configuration exports, temporary
-authorization request files, or Keychain contents in bug reports. Redact endpoint
-and private-network information if your network requires it. Use synthetic keys
-when reporting parser issues.
+authorization request files, Keychain contents, or screenshots showing revealed
+keys in bug reports. Redact endpoint and private-network information if your
+network requires it. Use synthetic keys when reporting parser issues.
+
+ZIP exports are unencrypted
+and include the selected configurations' secrets. They are created only after
+an explicit user selection and save confirmation, with owner-only file permissions.
+Do not store them in public or shared folders.
 
 Report vulnerabilities privately through GitHub's **Security → Report a
 vulnerability** for [timfeskens/tunneldeck](https://github.com/timfeskens/tunneldeck/security/advisories/new).

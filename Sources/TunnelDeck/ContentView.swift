@@ -21,6 +21,7 @@ struct ContentView: View {
     @State private var removing = false
     @State private var archive: ArchiveDraft?
     @State private var importing = false
+    @State private var exporting = false
 
     var body: some View {
         NavigationSplitView {
@@ -43,6 +44,9 @@ struct ContentView: View {
                     Menu {
                         Button("Import from File or ZIP…", action: importFile)
                         Button("Add Empty Tunnel…") { draft = EditorDraft(name: "", text: "[Interface]\nPrivateKey = \nAddress = \n\n[Peer]\nPublicKey = \nAllowedIPs = \nEndpoint = \n") }
+                        Divider()
+                        Button("Export Tunnels to ZIP…") { exporting = true }
+                            .disabled(store.profiles.isEmpty)
                     } label: { Image(systemName: "plus") }
                     .menuStyle(.borderlessButton)
                     .fixedSize()
@@ -103,6 +107,7 @@ struct ContentView: View {
         .sheet(item: $archive) { archive in
             ArchiveConfirmation(store: store, tunnels: archive.tunnels)
         }
+        .sheet(isPresented: $exporting) { TunnelExport(store: store) }
         .overlay {
             if importing { ProgressView("Reading tunnels…").padding(24).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12)) }
         }
@@ -130,6 +135,58 @@ struct ContentView: View {
                 else if let tunnel = tunnels.first { draft = EditorDraft(name: tunnel.name, text: tunnel.text) }
             } catch { store.error = (error as? DeckError)?.localizedDescription ?? "The selected file could not be read." }
         }
+    }
+}
+
+private struct TunnelExport: View {
+    @ObservedObject var store: TunnelStore
+    @State private var selected = Set<UUID>()
+    @State private var error: String?
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Export Tunnels").font(.headline)
+            Text("Choose the tunnels to include in a WireGuard ZIP archive.").foregroundStyle(.secondary)
+            List(store.profiles) { profile in
+                Toggle(profile.name, isOn: Binding(
+                    get: { selected.contains(profile.id) },
+                    set: { if $0 { selected.insert(profile.id) } else { selected.remove(profile.id) } }
+                )).toggleStyle(.checkbox)
+            }
+            HStack {
+                Button("Select All") { selected = Set(store.profiles.map(\.id)) }
+                Button("Deselect All") { selected.removeAll() }
+                Spacer()
+                Text("\(selected.count) selected").foregroundStyle(.secondary)
+            }
+            Label("The ZIP is not encrypted and contains private keys. Store it securely and share it only with people you trust.", systemImage: "exclamationmark.triangle")
+                .font(.callout).foregroundStyle(.orange)
+            Text("Exports include configuration files only, not on-demand rules or connection status.")
+                .font(.caption).foregroundStyle(.secondary)
+            if let error { Text(error).font(.caption).foregroundStyle(.red) }
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Export ZIP…", action: export).keyboardShortcut(.defaultAction)
+                    .disabled(selected.isEmpty || store.busy != nil || store.installingService)
+            }
+        }
+        .padding(20).frame(width: 480, height: 440)
+    }
+
+    private func export() {
+        let panel = NSSavePanel()
+        panel.title = "Export WireGuard Tunnels"
+        panel.nameFieldStringValue = "TunnelDeck.zip"
+        panel.allowedContentTypes = [.zip]
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let archive = try store.exportArchive(selecting: selected)
+            try ArchiveExport.write(archive, to: url)
+            dismiss()
+        } catch { self.error = "Could not export the selected tunnels. Check Keychain access and that the destination folder is writable." }
     }
 }
 

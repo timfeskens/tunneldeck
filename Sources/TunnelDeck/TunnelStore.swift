@@ -63,6 +63,15 @@ final class TunnelStore: ObservableObject {
 
     func configuration(for profile: TunnelProfile) throws -> String { try SecureStore.read(profile.id) }
 
+    func exportArchive(selecting ids: Set<UUID>) throws -> Data {
+        guard busy == nil, !installingService else { throw DeckError.message("Wait for the current operation to finish.") }
+        guard !ids.isEmpty, ids.count <= 256 else { throw DeckError.message("Select between 1 and 256 tunnels to export.") }
+        let selected = profiles.filter { ids.contains($0.id) }
+        guard selected.count == ids.count else { throw DeckError.message("The selected tunnel list changed. Select the tunnels again.") }
+        let tunnels = try selected.map { ImportedTunnel(name: $0.name, text: try configuration(for: $0)) }
+        return try ArchiveExport.make(tunnels: tunnels)
+    }
+
     /// Validate the entire archive before saving anything. Never replace existing
     /// profiles; repeated names receive a suffix, including within one archive.
     func importTunnels(_ tunnels: [ImportedTunnel]) throws {

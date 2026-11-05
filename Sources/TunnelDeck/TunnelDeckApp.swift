@@ -30,18 +30,24 @@ struct TunnelDeckApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("TunnelDeck", id: "main") {
+        Window("TunnelDeck", id: "main") {
             ContentView(store: store)
                 .frame(minWidth: 680, minHeight: 440)
+                .background(MainWindowRegistration(delegate: appDelegate))
                 .onAppear { appDelegate.store = store }
         }
         .defaultSize(width: 760, height: 520)
         .commands {
             CommandGroup(replacing: .newItem) {}
+            CommandGroup(after: .windowArrangement) {
+                Button("Hide to Menu Bar") { appDelegate.hideToMenuBar() }
+            }
         }
 
         MenuBarExtra {
-            MenuContents(store: store)
+            MenuContents(store: store, hideToMenuBar: appDelegate.hideToMenuBar, showMainWindow: {
+                appDelegate.mainWindow?.makeKeyAndOrderFront(nil)
+            })
         } label: {
             Image(systemName: store.connectedCount > 0 ? "checkmark.shield.fill" : "network")
         }
@@ -51,6 +57,33 @@ struct TunnelDeckApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     weak var store: TunnelStore?
+    weak var mainWindow: NSWindow?
+    private var closeObserver: NSObjectProtocol?
+
+    func register(_ window: NSWindow) {
+        guard mainWindow !== window else { return }
+        if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
+        mainWindow = window
+        closeObserver = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { _ in
+            Task { @MainActor in NSApp.setActivationPolicy(.accessory) }
+        }
+    }
+
+    func hideToMenuBar() {
+        // Do not strand an open editor, save panel or authorization dialog.
+        guard let mainWindow, mainWindow.attachedSheet == nil, NSApp.modalWindow == nil,
+              store?.busy == nil, store?.installingService != true else { NSSound.beep(); return }
+        mainWindow.orderOut(nil)
+        NSApp.setActivationPolicy(.accessory)
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        sender.setActivationPolicy(.regular)
+        mainWindow?.makeKeyAndOrderFront(nil)
+        return true
+    }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let store else { return .terminateNow }
@@ -66,8 +99,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+private struct MainWindowRegistration: NSViewRepresentable {
+    let delegate: AppDelegate
+    func makeNSView(context: Context) -> NSView { NSView() }
+    func updateNSView(_ view: NSView, context: Context) {
+        DispatchQueue.main.async { if let window = view.window { delegate.register(window) } }
+    }
+}
+
 struct MenuContents: View {
     @ObservedObject var store: TunnelStore
+    let hideToMenuBar: () -> Void
+    let showMainWindow: () -> Void
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -83,8 +126,13 @@ struct MenuContents: View {
         }
         Divider()
         Button("Manage Tunnels…") {
+            NSApp.setActivationPolicy(.regular)
             openWindow(id: "main")
+            showMainWindow()
             NSApp.activate(ignoringOtherApps: true)
+        }
+        Button("Hide to Menu Bar") {
+            hideToMenuBar()
         }
         Button("Quit TunnelDeck") {
             NSApp.terminate(nil)

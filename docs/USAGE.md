@@ -17,6 +17,34 @@ TunnelDeck cannot control another app's on-demand rules.
 **Quitting the app leaves tunnels connected.** Reopen it to manage them. Interfaces
 do not survive reboot unless an enabled on-demand rule reconnects them.
 
+## Hide the window without quitting
+
+Close the main window, or choose **Hide to Menu Bar** from the menu-bar menu or
+the **Window** menu. TunnelDeck keeps running in the menu bar and disappears from
+the Dock. Connections and automatic status updates continue normally.
+Choose **Manage Tunnels…** in the menu bar to show the window and Dock icon again.
+**Quit TunnelDeck** remains a separate action. Finish or cancel any open sheet
+before using Hide to Menu Bar.
+
+## Export selected tunnels
+
+Choose **+ → Export Tunnels to ZIP…**, check the tunnels to include, then choose
+**Export ZIP…** and a destination. **Select All** and **Deselect All** are available;
+no tunnels are selected by default. Connected tunnels can also be exported without
+disconnecting them. Exporting never changes configurations or connection state.
+
+**The ZIP is unencrypted and includes private keys and any preshared keys.** Keep
+it in a secure location and do not attach it to a public issue. The archive and
+its staging file are written with owner-only permissions; copying it elsewhere,
+cloud sync or a filesystem without Unix permissions can change that protection.
+Exporting may prompt for Keychain access.
+
+Each selected tunnel becomes one `.conf` file, compatible with TunnelDeck's ZIP
+import and standard WireGuard tools. Unsafe filename characters are replaced;
+duplicate filenames receive a number. Configurations are preserved in full,
+including imported DNS values (which TunnelDeck does not apply). On-demand rules
+and connection status are not included.
+
 ## On-demand activation
 
 Select a tunnel and open **Activate on demand → Configure…**. Choose Wi-Fi,
@@ -77,7 +105,7 @@ releases are ad-hoc signed, not Developer ID signed or notarized.
   This is not application-health failover or automatic MTU discovery.
 - **Not a System Settings VPN extension.** Tunnels use command-line WireGuard
   tools, not Apple's NetworkExtension framework, and do not appear in **System Settings → VPN**.
-- No key generation, configuration export, QR-code import, or custom configuration hooks.
+- No key generation, QR-code import, or custom configuration hooks.
 - No production security audit. Handshakes and route health do not prove
   application reachability or traffic isolation under every network condition.
 

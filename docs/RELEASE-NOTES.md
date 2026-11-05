@@ -1,3 +1,13 @@
+## New in v0.6.2
+
+- Close the main window or choose **Hide to Menu Bar** to remove TunnelDeck from
+  the Dock without quitting. **Manage Tunnels…** restores the window and Dock icon.
+- **Export Tunnels to ZIP…** lets you choose individual tunnels, select all, or
+  deselect all. Exports contain standard `.conf` files and can be imported again.
+- Export ZIPs are **unencrypted and include private keys**. A warning is shown
+  before export; files are saved with owner-only permissions. On-demand rules and
+  connection status are not exported. Exporting does not disconnect tunnels.
+
 ## Install
 
 **Apple Silicon (M-series), macOS 14 or newer. Intel is not supported.**
@@ -15,9 +25,7 @@ on-demand setting before migrating. Split tunnels only; system DNS is preserved.
 
 ## Included
 
-- Release-build fix for patched Bash on clean GitHub runners; loadable modules disabled.
-
-- Native tunnel list, menu-bar controls, ZIP import, Keychain storage.
+- Native tunnel list, menu-bar controls, selected ZIP export/import, Keychain storage.
 - Simultaneous disjoint tunnels and per-tunnel on-demand activation.
 - Root service for password-free routine operations, automatic route/stat refresh,
   duplicate-address warnings, and deliberate route repair.

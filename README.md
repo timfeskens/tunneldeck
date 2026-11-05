@@ -23,7 +23,9 @@
 
 - **Stay connected to different networks** with independent tunnel controls.
 - **Manage connections from the menu bar** or the native macOS window.
+- **Keep the Dock clear** by closing the window or choosing Hide to Menu Bar.
 - **Import your existing profiles** from WireGuard `.conf` files or ZIP exports.
+- **Export selected tunnels** to a standard WireGuard ZIP archive.
 - **Connect automatically** on Wi-Fi, Ethernet, or selected Wi-Fi networks.
 - **See connection details** with route warnings, handshake times, and transfer stats.
 - **Keep configurations in Keychain**, with keys hidden by default.
