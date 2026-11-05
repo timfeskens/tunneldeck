@@ -1,8 +1,32 @@
 # Development and release builds
 
-See the [README](../README.md#development) for a source-only build. Apple Silicon,
-macOS 14+, and Xcode / Swift 6 are required. The optional local test suite can be
+Apple Silicon, macOS 14+, and Xcode / Swift 6 are required. The optional local test suite can be
 run with `swift test` when present; it is not included in the repository.
+
+## Build from source
+
+A source-only build uses Homebrew tools:
+
+```sh
+git clone https://github.com/timfeskens/tunneldeck.git
+cd tunneldeck
+brew install wireguard-tools wireguard-go bash
+bash scripts/build.sh
+open dist/TunnelDeck.app
+```
+
+The script assembles and ad-hoc signs the app and embedded helper. It does not
+install the service, copy the app to Applications, or change network settings.
+`swift run` alone does not assemble the helper bundle.
+
+- `Sources/TunnelDeck`: SwiftUI app, Keychain storage, and service client.
+- `Sources/TunnelDeckCore`: configuration validation, ZIP import, routing models, and endpoint resolution.
+- `Sources/TunnelDeckHelper`: privileged service, installer, and WireGuard runner.
+- `scripts/`: app/runtime builds, DMG packaging, verification, and icon generation.
+
+The unit-test suite is maintained locally and is not included in this repository.
+CI builds a fresh checkout; release CI also verifies the packaged DMG. Live VPN
+testing requires explicit test profiles and an independent recovery connection.
 
 ## Standalone release build
 
