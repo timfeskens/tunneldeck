@@ -1,0 +1,29 @@
+name: Build
+
+on:
+  push:
+    branches: ['main']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-15-arm64
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift version
+        run: swift --version
+      - name: Unit tests (no VPN operations)
+        if: ${{ hashFiles('Tests/**/*.swift') != '' }}
+        run: swift test
+      - name: Build local application
+        run: bash scripts/build.sh
+      - name: Preserve app executable permissions
+        run: ditto -c -k --keepParent dist/TunnelDeck.app dist/TunnelDeck-development.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TunnelDeck-local-build
+          path: dist/TunnelDeck-development.zip

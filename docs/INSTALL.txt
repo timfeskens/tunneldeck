@@ -1,0 +1,30 @@
+TunnelDeck — Apple Silicon (M-series Macs), macOS 14 or newer
+
+INSTALL
+1. Drag TunnelDeck.app onto the Applications shortcut.
+2. Eject this disk image and open TunnelDeck from Applications.
+3. This early release is ad-hoc signed, NOT Developer ID signed or notarized.
+   If macOS blocks it, review System Settings > Privacy & Security > Open Anyway.
+   Only do this for a download you trust. Do not disable Gatekeeper globally.
+4. Click Install / Update and approve the administrator prompt once. This installs
+   the root service and verified, root-owned copies of the bundled VPN tools.
+   No Homebrew installation or separate VPN subscription is needed.
+5. Import your WireGuard .conf file or exported ZIP. Do not activate the same
+   profile/client keys in another app at the same time. If migrating from the
+   official app, disable that profile's on-demand setting and deactivate it first.
+
+UPDATES
+Quit TunnelDeck and choose Leave Connected. Replace the app in Applications,
+reopen it, and approve Install / Update for the new build. The service update
+does not intentionally restart tunnels. Do not delete old Runtime directories
+while tunnels are active: their background route monitors may still use them.
+
+LIMITS
+Split tunnels only; system DNS is preserved, not replaced by imported DNS.
+Route health and handshakes do not prove application reachability.
+Intel Macs are not supported by this release. No automatic update mechanism.
+
+SOURCE AND LICENSES
+Corresponding source archives and THIRD_PARTY.md are included in this image and
+on the GitHub release. SHA256SUMS.txt is available on the release page.
+Private repository downloads require an authorized GitHub account.

@@ -1,0 +1,11 @@
+.build/
+.swiftpm/
+dist/
+.DS_Store
+*.conf
+*.conf.zip
+*.xcuserstate
+Tests/
+test-results/
+*.xcresult/
+*.junit.xml

@@ -1,0 +1,82 @@
+name: Release DMG
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing version tag (for example v0.6.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: macos-15-arm64
+    timeout-minutes: 45
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Validate version and architecture
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$(uname -m)" == arm64 ]]
+          [[ "$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' Resources/Info.plist)" == "${TAG#v}" ]]
+          [[ "$(git rev-parse HEAD)" == "$(git rev-list -n 1 "$TAG")" ]]
+      - name: Build standalone release app
+        run: BUNDLE_RUNTIME=1 bash scripts/build.sh
+      - name: Include corresponding application source
+        run: git archive --format=tar.gz --prefix=TunnelDeck/ -o "dist/TunnelDeck-${TAG#v}-source.tar.gz" HEAD
+      - name: Package DMG
+        run: bash scripts/package-dmg.sh
+      - name: Verify mounted DMG without Homebrew
+        run: bash scripts/verify-dmg.sh "dist/TunnelDeck-${TAG#v}-arm64.dmg"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-arm64
+          path: |
+            dist/*.dmg
+            dist/*-source.tar.gz
+            dist/TunnelDeck-runtime-sources.tar.gz
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-arm64
+          path: release
+      - name: Publish verified assets
+        run: |
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --verify-tag --draft --title "TunnelDeck $TAG" --notes-file docs/RELEASE-NOTES.md
+          fi
+          gh release upload "$TAG" release/* --clobber
+          gh release edit "$TAG" --draft=false
