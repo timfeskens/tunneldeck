@@ -31,7 +31,7 @@ cp -R "$WORK/sources/bash-5.3" "$WORK/bash-build"
 touch "$WORK/bash-build/configure"
 # Recent SDKs expose strchrnul even when targeting older macOS. Use Bash's
 # fallback instead of importing the symbol introduced in macOS 15.4.
-(cd "$WORK/bash-build" && bash_cv_func_strchrnul_works=no ac_cv_func_dlopen=no ac_cv_func_dlsym=no ./configure --prefix=/usr --without-bash-malloc --disable-readline --disable-nls --disable-progcomp > "$WORK/bash-configure.log" && make -j "$JOBS" > "$WORK/bash-build.log") || { cat "$WORK/bash-configure.log" "$WORK/bash-build.log"; exit 1; }
+(cd "$WORK/bash-build" && bash_cv_func_strchrnul_works=no ac_cv_lib_dl_dlopen=no ac_cv_func_dlopen=no ac_cv_func_dlclose=no ac_cv_func_dlsym=no ./configure --prefix=/usr --without-bash-malloc --disable-readline --disable-nls --disable-progcomp > "$WORK/bash-configure.log" && make -j "$JOBS" > "$WORK/bash-build.log") || { cat "$WORK/bash-configure.log" "$WORK/bash-build.log"; exit 1; }
 cp "$WORK/bash-build/bash" "$OUT/bin/bash"
 
 git clone --quiet https://git.zx2c4.com/wireguard-tools "$WORK/tools"
@@ -67,6 +67,8 @@ root = pathlib.Path(sys.argv[1])
 undefined = subprocess.check_output(['nm', '-u', str(root / 'bin/bash')], text=True)
 if '_strchrnul' in undefined:
     raise SystemExit('Bash imports strchrnul, which requires macOS 15.4')
+if '_dlopen' in undefined:
+    raise SystemExit('Bash loadable modules were not disabled')
 for name in ['bash', 'wg', 'wireguard-go']:
     path = root / 'bin' / name
     links = subprocess.check_output(['otool', '-L', str(path)], text=True).splitlines()[1:]
