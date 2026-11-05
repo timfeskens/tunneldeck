@@ -10,12 +10,14 @@ permissions:
 
 jobs:
   macos:
-    runs-on: macos-15-arm64
+    runs-on: macos-15
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - name: Swift version
-        run: swift --version
+        run: |
+          [[ "$(uname -m)" == arm64 ]]
+          swift --version
       - name: Unit tests (no VPN operations)
         if: ${{ hashFiles('Tests/**/*.swift') != '' }}
         run: swift test
