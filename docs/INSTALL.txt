@@ -27,4 +27,3 @@ Intel Macs are not supported by this release. No automatic update mechanism.
 SOURCE AND LICENSES
 Corresponding source archives and THIRD_PARTY.md are included in this image and
 on the GitHub release. SHA256SUMS.txt is available on the release page.
-Private repository downloads require an authorized GitHub account.

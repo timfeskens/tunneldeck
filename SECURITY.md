@@ -1,6 +1,6 @@
 # Security
 
-TunnelDeck is an early, unaudited local-build application. It manages network
+TunnelDeck is an early, unaudited application. It manages network
 interfaces as root after explicit macOS administrator authorization. Review the
 README's privilege model and limitations before use.
 
@@ -13,8 +13,9 @@ one approved service update to enroll their new code hash.
 Enabling on-demand also stores root-only persistent copies of enabled configs.
 Disabling the last rule removes that rule/config but keeps the manual-control
 root service installed. No production security audit has been performed.
-Homebrew dependencies remain a trusted, user-writable part of this privilege
-model. Wi-Fi rules fail closed when macOS withholds the SSID. Automatic activation
+Source-only development builds use trusted, user-writable Homebrew dependencies;
+release builds install root-owned copies of their bundled runtime.
+Wi-Fi rules fail closed when macOS withholds the SSID. Automatic activation
 is not a kill switch and does not establish that traffic reached the peer.
 
 Do not share real private keys, preshared keys, configuration exports, temporary
@@ -22,10 +23,10 @@ authorization request files, or Keychain contents in bug reports. Redact endpoin
 and private-network information if your network requires it. Use synthetic keys
 when reporting parser issues.
 
-If publishing a fork, provide a private security-reporting channel before
-distributing builds. This local project does not yet have a hosted repository or
-security contact. Do not post an exploitable security issue publicly until a
-maintainer has been contacted privately.
+Report vulnerabilities privately through GitHub's **Security → Report a
+vulnerability** for [timfeskens/tunneldeck](https://github.com/timfeskens/tunneldeck/security/advisories/new).
+Do not post exploitable security issues or sensitive configurations in public issues.
+If publishing a fork, provide a private security-reporting channel before distributing builds.
 
 Release DMGs are Apple Silicon only and bundle Bash/WireGuard command-line tools.
 The approved installer verifies their SHA-256 manifest and copies regular files

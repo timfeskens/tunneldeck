@@ -6,7 +6,7 @@ Download the arm64 DMG, open it, drag **TunnelDeck.app → Applications**, then
 launch the installed app. Approve **Install / Update…** once for its root service.
 The WireGuard runtime is bundled: **Homebrew is not required**.
 
-**Early private release: ad-hoc signed, not notarized.** macOS may block the first
+**Early release: ad-hoc signed, not notarized.** macOS may block the first
 launch; use **System Settings → Privacy & Security → Open Anyway** only after
 verifying that you trust the download. Do not disable Gatekeeper globally.
 
