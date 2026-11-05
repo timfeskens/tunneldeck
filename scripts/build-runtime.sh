@@ -45,6 +45,8 @@ mkdir "$WORK/sources/wireguard-go"
 git -C "$WORK/go" archive HEAD | tar -xf - -C "$WORK/sources/wireguard-go"
 (cd "$WORK/sources/wireguard-go" && go mod vendor && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -mod=vendor -trimpath -o "$OUT/bin/wireguard-go" .)
 cp "$WORK/sources/wireguard-go/LICENSE" "$OUT/Licenses/wireguard-go-MIT.txt"
+cp "$(go env GOROOT)/LICENSE" "$OUT/Licenses/Go-BSD-3-Clause.txt"
+cp "$(go env GOROOT)/PATENTS" "$OUT/Licenses/Go-PATENTS.txt"
 cp "$ROOT/scripts/build-runtime.sh" "$ROOT/scripts/bash-patches.sha256" "$WORK/sources/"
 cat > "$WORK/sources/BUILD-INFO.txt" <<EOF
 Bash 5.3 with upstream patches 001–020; wireguard-tools 49ce333da02056ae7b22ee2aeb6afe8aaed79b19;

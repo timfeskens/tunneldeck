@@ -10,6 +10,7 @@ Release DMGs include separate command-line programs used by TunnelDeck:
 
 These programs run as separate processes; they are not linked into TunnelDeck.
 License texts are in `TunnelDeck.app/Contents/Resources/Runtime/Licenses`.
+The Go runtime's BSD license and patent grant are included there as well.
 Corresponding source for the exact bundled versions, Go's vendored dependencies
 (with their license files), and the build instructions accompany each release as
 `TunnelDeck-runtime-sources.tar.gz`. The DMG also contains this source archive.
