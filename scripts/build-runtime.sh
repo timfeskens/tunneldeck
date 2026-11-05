@@ -25,9 +25,13 @@ done < "$ROOT/scripts/bash-patches.sha256"
 cp "$WORK/sources/bash-5.3/COPYING" "$OUT/Licenses/bash-GPL-3.0.txt"
 # No interactive readline/gettext or user-loadable modules in a VPN script runner.
 cp -R "$WORK/sources/bash-5.3" "$WORK/bash-build"
+# Upstream patches update configure.ac as well as the shipped configure script.
+# Build that shipped script; do not require autoconf just because timestamps from
+# extraction/patching make its inputs appear newer.
+touch "$WORK/bash-build/configure"
 # Recent SDKs expose strchrnul even when targeting older macOS. Use Bash's
 # fallback instead of importing the symbol introduced in macOS 15.4.
-(cd "$WORK/bash-build" && bash_cv_func_strchrnul_works=no ./configure --prefix=/usr --without-bash-malloc --disable-readline --disable-nls --disable-progcomp --disable-dynamic-loading > "$WORK/bash-configure.log" && make -j "$JOBS" > "$WORK/bash-build.log") || { cat "$WORK/bash-configure.log" "$WORK/bash-build.log"; exit 1; }
+(cd "$WORK/bash-build" && bash_cv_func_strchrnul_works=no ac_cv_func_dlopen=no ac_cv_func_dlsym=no ./configure --prefix=/usr --without-bash-malloc --disable-readline --disable-nls --disable-progcomp > "$WORK/bash-configure.log" && make -j "$JOBS" > "$WORK/bash-build.log") || { cat "$WORK/bash-configure.log" "$WORK/bash-build.log"; exit 1; }
 cp "$WORK/bash-build/bash" "$OUT/bin/bash"
 
 git clone --quiet https://git.zx2c4.com/wireguard-tools "$WORK/tools"

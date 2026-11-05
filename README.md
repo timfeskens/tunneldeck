@@ -44,7 +44,7 @@ does **not** install packages, copy the app to Applications, or change VPNs.
 
 ## Release workflow
 
-Push a version tag matching `CFBundleShortVersionString` (for example `v0.6.0`).
+Push a version tag matching `CFBundleShortVersionString` (for example `v0.6.1`).
 `.github/workflows/release.yml` builds on an Apple Silicon macOS runner, builds
 pinned standalone runtime tools from source, signs ad hoc, creates an arm64 DMG,
 mounts and verifies it, and publishes a GitHub Release **only after verification**.
@@ -58,9 +58,9 @@ the release locally with a working Go 1.26 toolchain:
 
 ```sh
 BUNDLE_RUNTIME=1 bash scripts/build.sh
-git archive --format=tar.gz --prefix=TunnelDeck/ -o dist/TunnelDeck-0.6.0-source.tar.gz HEAD
+git archive --format=tar.gz --prefix=TunnelDeck/ -o dist/TunnelDeck-0.6.1-source.tar.gz HEAD
 bash scripts/package-dmg.sh
-bash scripts/verify-dmg.sh dist/TunnelDeck-0.6.0-arm64.dmg
+bash scripts/verify-dmg.sh dist/TunnelDeck-0.6.1-arm64.dmg
 ```
 
 Local tests stay ignored by Git by request. CI builds the source checkout and

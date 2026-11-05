@@ -15,6 +15,8 @@ on-demand setting before migrating. Split tunnels only; system DNS is preserved.
 
 ## Included
 
+- Release-build fix for patched Bash on clean GitHub runners; loadable modules disabled.
+
 - Native tunnel list, menu-bar controls, ZIP import, Keychain storage.
 - Simultaneous disjoint tunnels and per-tunnel on-demand activation.
 - Root service for password-free routine operations, automatic route/stat refresh,

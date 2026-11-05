@@ -23,6 +23,7 @@ assert (app / 'Contents/Info.plist').is_file()
 assert list(app.parent.glob('TunnelDeck-*-source.tar.gz'))
 assert subprocess.check_output(['readlink', str(app.parent / 'Applications')], text=True).strip() == '/Applications'
 assert '_strchrnul' not in subprocess.check_output(['nm', '-u', str(runtime / 'bin/bash')], text=True)
+assert '_dlopen' not in subprocess.check_output(['nm', '-u', str(runtime / 'bin/bash')], text=True)
 assert set(manifest) == {'bash', 'wg', 'wg-quick', 'wireguard-go'}
 for name, checksum in manifest.items():
     path = runtime / 'bin' / name
