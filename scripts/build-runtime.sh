@@ -29,6 +29,10 @@ cp -R "$WORK/sources/bash-5.3" "$WORK/bash-build"
 # Build that shipped script; do not require autoconf just because timestamps from
 # extraction/patching make its inputs appear newer.
 touch "$WORK/bash-build/configure"
+# Use Bash's shipped parser rather than regenerating it with macOS's old yacc.
+# No pinned upstream patch changes parse.y. Archive/copy timestamps can otherwise
+# make make rebuild y.tab.c, which requires a newer Bison than Apple's provides.
+touch "$WORK/bash-build/y.tab.c" "$WORK/bash-build/y.tab.h"
 # Recent SDKs expose strchrnul even when targeting older macOS. Use Bash's
 # fallback instead of importing the symbol introduced in macOS 15.4.
 (cd "$WORK/bash-build" && bash_cv_func_strchrnul_works=no ac_cv_lib_dl_dlopen=no ac_cv_func_dlopen=no ac_cv_func_dlclose=no ac_cv_func_dlsym=no ./configure --prefix=/usr --without-bash-malloc --disable-readline --disable-nls --disable-progcomp > "$WORK/bash-configure.log" && make -j "$JOBS" > "$WORK/bash-build.log") || { cat "$WORK/bash-configure.log" "$WORK/bash-build.log"; exit 1; }

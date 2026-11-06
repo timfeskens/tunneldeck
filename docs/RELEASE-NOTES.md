@@ -1,4 +1,9 @@
-## New in v0.6.3
+## New in v0.6.4
+
+This release includes the connected-editing and authentication changes planned
+for v0.6.3, whose release build failed before publication. The bundled Bash build
+now uses its shipped parser instead of trying to regenerate it with macOS's older
+yacc. No v0.6.3 download was published.
 
 - **Edit connected tunnels** without disconnecting first. **Save & Reconnect**
   briefly reconnects only the edited tunnel; there is no save-for-later mode.
