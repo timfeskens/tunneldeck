@@ -19,6 +19,24 @@ The script assembles and ad-hoc signs the app and embedded helper. It does not
 install the service, copy the app to Applications, or change network settings.
 `swift run` alone does not assemble the helper bundle.
 
+### Stable local signing and Keychain access
+
+The default remains ad-hoc signing. To use an existing Apple Development identity
+for a local build, set `CODE_SIGN_IDENTITY` to its SHA-1 fingerprint when invoking
+`scripts/build.sh`. List available identities with `security find-identity -v -p
+codesigning`. Both app and helper are signed with the selected identity. Keep the
+same bundle ID and signing identity on subsequent builds to retain Keychain trust.
+Do not commit private keys/certificates or silently fall back when signing fails.
+Apple Development signing is for local development; it is not Developer ID
+distribution signing or notarization. Existing items may need a migration prompt.
+
+The login-Keychain implementation uses macOS's legacy app-specific `SecAccess`
+ACL API, which is deprecated but needed for the current non-sandboxed, ad-hoc
+distribution model. A data-protection Keychain migration requires a separate
+entitlement/provisioning/signing design. `LocalAuthentication` guards sensitive
+UI operations; it is not represented as cryptographic user-presence protection
+on the stored Keychain items.
+
 - `Sources/TunnelDeck`: SwiftUI app, Keychain storage, and service client.
 - `Sources/TunnelDeckCore`: configuration validation, ZIP import, routing models, and endpoint resolution.
 - `Sources/TunnelDeckHelper`: privileged service, installer, and WireGuard runner.

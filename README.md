@@ -29,6 +29,8 @@
 - **Connect automatically** on Wi-Fi, Ethernet, or selected Wi-Fi networks.
 - **See connection details** with route warnings, handshake times, and transfer stats.
 - **Keep configurations in Keychain**, with keys hidden by default.
+- **Edit connected tunnels** with Save & Reconnect, leaving other tunnels alone.
+- **Use Touch ID or your Mac password** for editing, revealing keys, and exporting.
 
 No TunnelDeck account, telemetry, or cloud service. The WireGuard runtime is
 included—**no Homebrew required**.

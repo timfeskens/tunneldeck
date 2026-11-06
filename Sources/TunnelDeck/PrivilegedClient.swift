@@ -1,6 +1,13 @@
 import Foundation
 import TunnelDeckCore
 
+enum ServiceOperationError: LocalizedError {
+    case uncertain
+    var errorDescription: String? {
+        "The service connection was interrupted. The update may still be finishing. Saved settings were retained; refresh and check this tunnel before retrying."
+    }
+}
+
 enum PrivilegedClient {
     static func perform(action: String, request: HelperRequest) async throws -> HelperResponse {
         do { _ = try await call(action: "ping", request: HelperRequest(id: request.id)) }
@@ -23,21 +30,22 @@ enum PrivilegedClient {
             connection.setCodeSigningRequirement(requirement)
             connection.remoteObjectInterface = NSXPCInterface(with: TunnelServiceProtocol.self)
             let result = ServiceResult(connection: connection, continuation: continuation)
-            connection.invalidationHandler = { result.finish(.failure(DeckError.message("The root service is unavailable or needs an approved update."))) }
-            connection.interruptionHandler = { result.finish(.failure(DeckError.message("The root service restarted. Refresh the tunnel status before trying again."))) }
+            let uncertainReplacement = action == "replace-configuration"
+            connection.invalidationHandler = { result.finish(.failure(uncertainReplacement ? ServiceOperationError.uncertain : DeckError.message("The root service is unavailable or needs an approved update."))) }
+            connection.interruptionHandler = { result.finish(.failure(uncertainReplacement ? ServiceOperationError.uncertain : DeckError.message("The root service restarted. Refresh the tunnel status before trying again."))) }
             connection.resume()
             let proxy = connection.remoteObjectProxyWithErrorHandler { _ in
-                result.finish(.failure(DeckError.message("The root service is unavailable or does not recognize this app build. Install or update it once.")))
+                result.finish(.failure(uncertainReplacement ? ServiceOperationError.uncertain : DeckError.message("The root service is unavailable or does not recognize this app build. Install or update it once.")))
             } as? TunnelServiceProtocol
             proxy?.perform(action, request: data) { response in
                 guard let response = try? JSONDecoder().decode(HelperResponse.self, from: response) else {
-                    result.finish(.failure(DeckError.message("Invalid service response."))); return
+                    result.finish(.failure(uncertainReplacement ? ServiceOperationError.uncertain : DeckError.message("Invalid service response."))); return
                 }
                 if response.success { result.finish(.success(response)) }
                 else { result.finish(.failure(DeckError.message(response.message))) }
             }
             DispatchQueue.global().asyncAfter(deadline: .now() + (action == "status" || action == "ping" ? 12 : 120)) {
-                result.finish(.failure(DeckError.message("The service did not respond in time. The operation may still be finishing; refresh before trying again.")))
+                result.finish(.failure(uncertainReplacement ? ServiceOperationError.uncertain : DeckError.message("The service did not respond in time. The operation may still be finishing; refresh before trying again.")))
             }
         }
     }

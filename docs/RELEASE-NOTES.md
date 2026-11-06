@@ -1,12 +1,27 @@
-## New in v0.6.2
+## New in v0.6.3
 
-- Close the main window or choose **Hide to Menu Bar** to remove TunnelDeck from
-  the Dock without quitting. **Manage Tunnels…** restores the window and Dock icon.
-- **Export Tunnels to ZIP…** lets you choose individual tunnels, select all, or
-  deselect all. Exports contain standard `.conf` files and can be imported again.
-- Export ZIPs are **unencrypted and include private keys**. A warning is shown
-  before export; files are saved with owner-only permissions. On-demand rules and
-  connection status are not exported. Exporting does not disconnect tunnels.
+- **Edit connected tunnels** without disconnecting first. **Save & Reconnect**
+  briefly reconnects only the edited tunnel; there is no save-for-later mode.
+  Saving a disconnected tunnel does not activate it.
+- Configuration, route conflicts, and endpoint resolution are checked before
+  disconnecting. On-demand configuration updates use the same operation lock.
+  Failed updates attempt to restore the previous configuration and connection;
+  incomplete recovery is reported explicitly. If the service response is lost,
+  saved new settings are retained because the operation may still be running.
+- **Touch ID or your Mac login password** is now required for editing existing
+  configurations, revealing imported keys, and exporting tunnels. Routine status
+  checks and background on-demand operations do not request biometric approval.
+- Keychain entries explicitly trust the app, not all applications. Existing
+  entries migrate in place after a successful read, preserving their contents.
+  macOS may request Keychain permission during migration or after future ad-hoc
+  updates. Touch ID is an app-level disclosure gate, not a biometric Keychain ACL,
+  and does not replace those system permission checks.
+- Local builds can opt into an existing stable signing identity through
+  `CODE_SIGN_IDENTITY`. Public release signing remains ad hoc, not notarized.
+
+Automated validation covers replacement sequencing, the local test suite, and
+disposable Keychain storage/migration. Live reconnect/recovery and interactive
+Touch ID approval have not been end-to-end validated for this release.
 
 ## Install
 

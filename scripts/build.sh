@@ -21,8 +21,10 @@ if [[ "${BUNDLE_RUNTIME:-0}" == 1 ]]; then
     ditto "$ROOT/dist/runtime" "$APP/Contents/Resources/Runtime"
     cp "$ROOT/THIRD_PARTY.md" "$APP/Contents/Resources/THIRD_PARTY.md"
 fi
-# Ad-hoc signing is suitable for local builds, not public distribution.
-codesign --force --sign - "$APP/Contents/MacOS/TunnelDeckHelper"
-codesign --force --sign - "$APP"
+# Set a stable Apple signing identity for local builds to retain app-specific
+# Keychain trust across updates. CI defaults to ad hoc; this does not notarize.
+SIGN_IDENTITY="${CODE_SIGN_IDENTITY:--}"
+codesign --force --sign "$SIGN_IDENTITY" "$APP/Contents/MacOS/TunnelDeckHelper"
+codesign --force --sign "$SIGN_IDENTITY" "$APP"
 codesign --verify --deep --strict "$APP"
 printf 'Built %s\nLaunch with: open "%s"\n' "$APP" "$APP"

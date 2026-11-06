@@ -8,6 +8,7 @@ private struct EditorDraft: Identifiable {
     var profile: TunnelProfile?
     var name: String
     var text: String
+    var authenticated = false
 }
 
 private struct ArchiveDraft: Identifiable {
@@ -22,6 +23,7 @@ struct ContentView: View {
     @State private var archive: ArchiveDraft?
     @State private var importing = false
     @State private var exporting = false
+    @State private var authenticating = false
 
     var body: some View {
         NavigationSplitView {
@@ -88,8 +90,15 @@ struct ContentView: View {
                 }
                 if let profile = store.selected {
                     TunnelDetails(store: store, profile: profile) {
-                        do { draft = EditorDraft(profile: profile, name: profile.name, text: try store.configuration(for: profile)) }
-                        catch { store.error = error.localizedDescription }
+                        guard !authenticating else { return }
+                        authenticating = true
+                        Task { @MainActor in
+                            defer { authenticating = false }
+                            do {
+                                try await UserAuthentication.authorize("Edit this tunnel’s configuration.")
+                                draft = EditorDraft(profile: profile, name: profile.name, text: try store.configuration(for: profile), authenticated: true)
+                            } catch { store.error = error.localizedDescription }
+                        }
                     }
                 } else {
                     ContentUnavailableView {
@@ -101,8 +110,9 @@ struct ContentView: View {
             }
             .navigationTitle(store.selected?.name ?? "TunnelDeck")
         }
+        .disabled(authenticating)
         .sheet(item: $draft) { draft in
-            TunnelEditor(store: store, profile: draft.profile, name: draft.name, text: draft.text)
+            TunnelEditor(store: store, profile: draft.profile, name: draft.name, text: draft.text, authenticated: draft.authenticated)
         }
         .sheet(item: $archive) { archive in
             ArchiveConfirmation(store: store, tunnels: archive.tunnels)
@@ -142,6 +152,7 @@ private struct TunnelExport: View {
     @ObservedObject var store: TunnelStore
     @State private var selected = Set<UUID>()
     @State private var error: String?
+    @State private var exporting = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -169,13 +180,25 @@ private struct TunnelExport: View {
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Export ZIP…", action: export).keyboardShortcut(.defaultAction)
-                    .disabled(selected.isEmpty || store.busy != nil || store.installingService)
+                    .disabled(selected.isEmpty || exporting || store.busy != nil || store.installingService)
             }
         }
+        .disabled(exporting)
         .padding(20).frame(width: 480, height: 440)
+        .interactiveDismissDisabled(exporting)
     }
 
     private func export() {
+        exporting = true
+        Task { @MainActor in
+            defer { exporting = false }
+            do { try await UserAuthentication.authorize("Export the selected tunnels, including their private keys.") }
+            catch { self.error = error.localizedDescription; return }
+            saveArchive()
+        }
+    }
+
+    private func saveArchive() {
         let panel = NSSavePanel()
         panel.title = "Export WireGuard Tunnels"
         panel.nameFieldStringValue = "TunnelDeck.zip"
@@ -307,7 +330,7 @@ private struct TunnelDetails: View {
                 HStack {
                     Text("Other tunnels stay connected.").font(.caption).foregroundStyle(.secondary)
                     Spacer()
-                    Button("Edit…", action: edit).disabled(state != nil || store.onDemand[profile.id]?.settings.enabled == true || store.busy != nil)
+                    Button("Edit…", action: edit).disabled(store.busy != nil || store.installingService)
                 }
                 Text("If this profile also exists in the official WireGuard app, leave that copy inactive. The official app can disconnect its own other tunnel when you activate a profile there.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -388,8 +411,11 @@ private struct TunnelEditor: View {
     let profile: TunnelProfile?
     @State var name: String
     @State var text: String
+    @State var authenticated = false
     @State private var revealed = false
     @State private var error: String?
+    @State private var saving = false
+    @State private var authenticating = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -399,7 +425,18 @@ private struct TunnelEditor: View {
             HStack {
                 Text("Configuration").foregroundStyle(.secondary)
                 Spacer()
-                Toggle("Reveal keys to edit", isOn: $revealed).toggleStyle(.checkbox)
+                Toggle("Reveal keys to edit", isOn: Binding(get: { revealed }, set: { value in
+                    guard value else { revealed = false; return }
+                    if authenticated { revealed = true; return }
+                    authenticating = true
+                    Task { @MainActor in
+                        defer { authenticating = false }
+                        do {
+                            try await UserAuthentication.authorize("Reveal and edit tunnel keys.")
+                            authenticated = true; revealed = true
+                        } catch { self.error = error.localizedDescription }
+                    }
+                })).toggleStyle(.checkbox).disabled(authenticating)
             }
             if revealed {
                 TextEditor(text: $text).font(.system(.body, design: .monospaced))
@@ -411,18 +448,31 @@ private struct TunnelEditor: View {
             }
             Text("DNS is preserved, not overridden. Split tunnels only. Hooks and SaveConfig are rejected. Configurations are stored in your macOS Keychain.")
                 .font(.caption).foregroundStyle(.secondary)
+            if reconnecting {
+                Text("Saving briefly reconnects only this tunnel. If applying the update fails, TunnelDeck attempts to restore its previous configuration and connection. Other tunnels stay connected.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             if let error { Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled) }
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Save") {
-                    do { try store.save(name: name, text: text, editing: profile); dismiss() }
-                    catch { self.error = error.localizedDescription }
+                if saving { ProgressView().controlSize(.small) }
+                Button(reconnecting ? "Save & Reconnect" : "Save") {
+                    saving = true
+                    Task { @MainActor in
+                        defer { saving = false }
+                        do { try await store.save(name: name, text: text, editing: profile); dismiss() }
+                        catch { self.error = error.localizedDescription }
+                    }
                 }.keyboardShortcut(.defaultAction).disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
-        .padding(20).frame(width: 580, height: 540)
+        .disabled(saving || authenticating)
+        .padding(20).frame(width: 580, height: reconnecting ? 600 : 540)
+        .interactiveDismissDisabled(saving || authenticating)
     }
+
+    private var reconnecting: Bool { profile.map { store.runtime[$0.id] != nil } ?? false }
 
     private var redacted: String {
         text.components(separatedBy: .newlines).map { line in

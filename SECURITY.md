@@ -28,6 +28,19 @@ and include the selected configurations' secrets. They are created only after
 an explicit user selection and save confirmation, with owner-only file permissions.
 Do not store them in public or shared folders.
 
+Interactive editing, revealing keys and export require LocalAuthentication
+(Touch ID or Mac login password). This is an app-level disclosure gate, not a
+biometric Keychain ACL. Saved configurations explicitly trust the signed app,
+never every application. Legacy entries are migrated in place after a successful
+read; denied migration preserves the original data. Ad-hoc rebuilds can still
+require Keychain permission again. Stable signing is necessary to preserve trust.
+
+Connected edits reconnect only the selected tunnel under the shared operation
+lock, including on-demand configuration changes. Validation and endpoint lookup
+precede disconnect. Failed updates attempt restoration; recovery failure is
+reported explicitly. Client timeouts do not prove completion or cancel work;
+saved new settings are retained when the service result is unknown.
+
 Report vulnerabilities privately through GitHub's **Security → Report a
 vulnerability** for [timfeskens/tunneldeck](https://github.com/timfeskens/tunneldeck/security/advisories/new).
 Do not post exploitable security issues or sensitive configurations in public issues.

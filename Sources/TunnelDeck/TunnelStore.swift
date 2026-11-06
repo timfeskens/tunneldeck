@@ -116,28 +116,48 @@ final class TunnelStore: ObservableObject {
         selection = prepared.first?.0.id ?? selection
     }
 
-    func save(name: String, text: String, editing: TunnelProfile?) throws {
+    func save(name: String, text: String, editing: TunnelProfile?) async throws {
         guard storageAvailable else { throw DeckError.message("Profile storage could not be loaded. Saving is disabled to protect existing data.") }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed.count <= 80 else { throw DeckError.message("Enter a tunnel name of 1–80 characters.") }
-        guard busy == nil else { throw DeckError.message("Wait for the current operation to finish.") }
-        if let editing, runtime[editing.id] != nil { throw DeckError.message("Disconnect before editing this tunnel.") }
-        if let editing, onDemand[editing.id]?.settings.enabled == true { throw DeckError.message("Turn off on-demand before editing this tunnel.") }
+        guard busy == nil, !installingService else { throw DeckError.message("Wait for the current operation to finish.") }
         let configuration = try WireGuardConfiguration(text: text)
         let profile = TunnelProfile(id: editing?.id ?? UUID(), name: trimmed, configuration: configuration)
         guard !profiles.contains(where: { $0.id != profile.id && $0.interfaceName == profile.interfaceName }) else {
             throw DeckError.message("Tunnel identifier collision; please try adding it again.")
         }
         let previousText = editing != nil ? try SecureStore.read(profile.id) : nil
+        let previousProfiles = profiles
+        // Let the service decide whether the tunnel is active under its lock;
+        // the UI's most recent status sample can be stale (on-demand/other app).
+        let needsServiceUpdate = editing != nil
+        busy = profile.id
+        defer { busy = nil; refresh(); refreshFromService() }
         try SecureStore.save(text, id: profile.id)
         var updated = profiles
         if let index = updated.firstIndex(where: { $0.id == profile.id }) { updated[index] = profile }
         else { updated.append(profile) }
-        do { try persist(updated) }
+        do {
+            try persist(updated)
+            if needsServiceUpdate {
+                let response = try await PrivilegedClient.perform(action: "replace-configuration", request: HelperRequest(id: profile.id, configuration: text))
+                if let state = response.runtime { runtime[profile.id] = state }
+                else { runtime.removeValue(forKey: profile.id) }
+            }
+        }
         catch {
-            if let previousText { try? SecureStore.save(previousText, id: profile.id) }
-            else { try? SecureStore.delete(profile.id) }
-            throw DeckError.message("Cannot save tunnel metadata. The previous configuration was preserved.")
+            let failure = error
+            // A client deadline/disconnect does not prove the root operation
+            // stopped. Do not roll back storage underneath an in-flight update.
+            if failure is ServiceOperationError { throw failure }
+            do {
+                if let previousText { try SecureStore.save(previousText, id: profile.id) }
+                else { try SecureStore.delete(profile.id) }
+                try persist(previousProfiles)
+            } catch {
+                throw DeckError.message("The update failed and saved settings could not be fully restored. Check Keychain access and this tunnel before retrying.")
+            }
+            throw failure
         }
         selection = profile.id
     }

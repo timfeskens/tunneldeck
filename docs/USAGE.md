@@ -7,7 +7,37 @@ TunnelDeck is early, unaudited software for Apple Silicon Macs running macOS 14+
 
 Choose **+ → Import from File or ZIP…**, review the profiles, then connect.
 WireGuard `.conf` files and ZIP exports are supported. Connecting another tunnel
-leaves existing TunnelDeck tunnels running. Edit or remove profiles only while disconnected.
+leaves existing TunnelDeck tunnels running. Remove profiles only while disconnected.
+
+## Edit a connected tunnel
+
+Choose **Edit…** and authenticate with Touch ID or your Mac login password.
+Connected tunnels use **Save & Reconnect**: saving briefly reconnects that tunnel
+only. There is no save-for-later mode. Routes, addresses and endpoint resolution
+are checked before disconnecting, and enabled on-demand rules receive the new
+configuration under the same operation lock. Other tunnels are not restarted.
+If applying the update fails, TunnelDeck attempts to restore the previous
+configuration and connection and reports whether recovery succeeded. A restored
+interface does not prove that the peer is reachable. If the service connection
+times out, check status before retrying: the operation may still be running.
+
+For disconnected tunnels, **Save** updates the configuration without connecting.
+An enabled on-demand rule is updated too; it may subsequently connect when its
+network rule matches.
+
+### Touch ID and Keychain permissions
+
+Editing existing configurations, revealing imported keys and exporting tunnels
+use macOS authentication: Touch ID when available, with login-password fallback.
+Routine statistics and the background on-demand loop do not request biometric
+authentication. This is an app-level authentication gate, not a biometric access
+control on each Keychain item.
+
+Keychain entries trust the app explicitly, not all applications. Existing entries
+are migrated in place after a successful read; macOS may request permission once
+during migration. Ad-hoc signatures change between builds, so a future ad-hoc
+update can still trigger Keychain permission dialogs. Touch ID does not override
+those dialogs. Stable signing is needed to retain trust across builds.
 
 Before migrating a profile from another app, deactivate its old copy **and disable
 its on-demand rule**. Never activate the same client keys/profile in two apps at once.
@@ -37,7 +67,8 @@ disconnecting them. Exporting never changes configurations or connection state.
 it in a secure location and do not attach it to a public issue. The archive and
 its staging file are written with owner-only permissions; copying it elsewhere,
 cloud sync or a filesystem without Unix permissions can change that protection.
-Exporting may prompt for Keychain access.
+Exporting first requires Touch ID or your Mac login password, and macOS may also
+request Keychain permission during migration or after an ad-hoc app update.
 
 Each selected tunnel becomes one `.conf` file, compatible with TunnelDeck's ZIP
 import and standard WireGuard tools. Unsafe filename characters are replaced;
