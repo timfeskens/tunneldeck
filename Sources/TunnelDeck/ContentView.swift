@@ -112,7 +112,7 @@ struct ContentView: View {
         }
         .disabled(authenticating)
         .sheet(item: $draft) { draft in
-            TunnelEditor(store: store, profile: draft.profile, name: draft.name, text: draft.text, authenticated: draft.authenticated)
+            TunnelEditor(store: store, profile: draft.profile, name: draft.name, text: draft.text, originalText: draft.profile == nil ? nil : draft.text, authenticated: draft.authenticated)
         }
         .sheet(item: $archive) { archive in
             ArchiveConfirmation(store: store, tunnels: archive.tunnels)
@@ -246,6 +246,8 @@ private struct TunnelDetails: View {
     let edit: () -> Void
     @State private var showOnDemand = false
     @State private var confirmRepair = false
+    @State private var confirmKeychainRepair = false
+    @State private var keychainRepaired = false
     var state: TunnelRuntime? { store.runtime[profile.id] }
 
     var body: some View {
@@ -258,9 +260,20 @@ private struct TunnelDetails: View {
                             .foregroundStyle(Color(nsColor: store.statusColor(profile.id)))
                     }
                     Spacer()
-                    Button(state == nil ? "Connect" : "Disconnect") { store.toggle(profile) }
+                    Button(state == nil ? "Connect" : state?.needsRetry == true ? "Retry Connection" : "Disconnect") { store.toggle(profile) }
                         .buttonStyle(.borderedProminent)
                         .disabled(store.busy != nil || store.installingService || !store.dependencies.missing.isEmpty)
+                }
+                if let localRoutes = state?.routeHealth?.localRoutes, !localRoutes.isEmpty {
+                    Text("Local LAN bypass: \(localRoutes.map(\.network).joined(separator: ", ")) uses your directly connected network, not this VPN. Saved AllowedIPs are unchanged.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                if let recovery = state?.routeRecovery, state?.needsRetry == true {
+                    Text(recovery.message).font(.caption).foregroundStyle(.secondary)
+                }
+                if state?.needsRetry == true {
+                    Button("Disconnect") { store.disconnect(profile) }
+                        .disabled(store.busy != nil || store.installingService)
                 }
                 if let health = state?.routeHealth, !health.healthy {
                     VStack(alignment: .leading, spacing: 8) {
@@ -332,6 +345,8 @@ private struct TunnelDetails: View {
                     Spacer()
                     Button("Edit…", action: edit).disabled(store.busy != nil || store.installingService)
                 }
+                Button("Repair Keychain Access…") { confirmKeychainRepair = true }
+                    .disabled(store.busy != nil || store.installingService)
                 Text("If this profile also exists in the official WireGuard app, leave that copy inactive. The official app can disconnect its own other tunnel when you activate a profile there.")
                     .font(.caption).foregroundStyle(.secondary)
             }
@@ -340,6 +355,19 @@ private struct TunnelDetails: View {
         .sheet(isPresented: $showOnDemand) {
             OnDemandEditor(store: store, profile: profile, settings: store.onDemand[profile.id]?.settings ?? OnDemandSettings())
         }
+        .confirmationDialog("Repair Keychain access for this tunnel?", isPresented: $confirmKeychainRepair) {
+            Button("Repair Access") {
+                Task { @MainActor in
+                    do { try await store.repairKeychainAccess(profile); keychainRepaired = true }
+                    catch { store.error = error.localizedDescription }
+                }
+            }
+        } message: {
+            Text("macOS may ask for your login-Keychain password to trust this app. Only this tunnel’s app permissions are updated; its keys and connection are not changed. Cancel stops the repair without an automatic retry.")
+        }
+        .alert("Keychain access repaired", isPresented: $keychainRepaired) {
+            Button("OK", role: .cancel) {}
+        } message: { Text("This app can read the configuration without a Keychain prompt. Try your original action again.") }
         .confirmationDialog("Repair this tunnel’s routes?", isPresented: $confirmRepair) {
             Button("Repair Routes") { store.repairRoutes(profile) }
         } message: {
@@ -411,6 +439,7 @@ private struct TunnelEditor: View {
     let profile: TunnelProfile?
     @State var name: String
     @State var text: String
+    var originalText: String? = nil
     @State var authenticated = false
     @State private var revealed = false
     @State private var error: String?
@@ -461,7 +490,7 @@ private struct TunnelEditor: View {
                     saving = true
                     Task { @MainActor in
                         defer { saving = false }
-                        do { try await store.save(name: name, text: text, editing: profile); dismiss() }
+                        do { try await store.save(name: name, text: text, editing: profile, originalText: originalText); dismiss() }
                         catch { self.error = error.localizedDescription }
                     }
                 }.keyboardShortcut(.defaultAction).disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

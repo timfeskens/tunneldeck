@@ -31,15 +31,32 @@ Do not store them in public or shared folders.
 Interactive editing, revealing keys and export require LocalAuthentication
 (Touch ID or Mac login password). This is an app-level disclosure gate, not a
 biometric Keychain ACL. Saved configurations explicitly trust the signed app,
-never every application. Legacy entries are migrated in place after a successful
-read; denied migration preserves the original data. Ad-hoc rebuilds can still
-require Keychain permission again. Stable signing is necessary to preserve trust.
+never every application. Normal Keychain operations suppress interactive system
+permission dialogs and never change ACLs. Explicit per-tunnel **Repair Keychain
+Access…** permits macOS to authorize an in-place ACL update without disclosing or
+replacing the secret. Cancellation does not trigger retries. Writes and removals
+verify decrypt access noninteractively before mutating existing items. Ad-hoc
+rebuilds can require repair again. Stable signing is needed to preserve trust.
 
 Connected edits reconnect only the selected tunnel under the shared operation
 lock, including on-demand configuration changes. Validation and endpoint lookup
 precede disconnect. Failed updates attempt restoration; recovery failure is
 reported explicitly. Client timeouts do not prove completion or cancel work;
 saved new settings are retained when the service result is unknown.
+
+Directly connected Wi-Fi/Ethernet subnets fully covering configured destinations
+are preserved as explicit local-LAN bypasses. That traffic is not VPN-encrypted;
+the app identifies the bypass. Saved AllowedIPs and WireGuard peer policy remain
+unchanged. Matching subnets do not authenticate a trusted home network. Gateway
+routes, partial LAN overlap, duplicate interface addresses and competing VPN
+routes are not exempted. No existing LAN route is deleted or replaced.
+
+Background route recovery uses the shared operation lock and the same conflict
+checks as manual repair. It adds missing routes only; it never disconnects a
+manual tunnel or deletes another interface's routes. Repairs and on-demand
+activation use at most three attempts with backoff per network/connection epoch;
+explicit retry or service restart resets the in-memory budget. This is not a
+handshake watchdog or kill switch. Route health is not proof of peer reachability.
 
 Report vulnerabilities privately through GitHub's **Security → Report a
 vulnerability** for [timfeskens/tunneldeck](https://github.com/timfeskens/tunneldeck/security/advisories/new).

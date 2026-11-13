@@ -38,7 +38,7 @@ struct Helper {
         return runtime
     }
 
-    func run(_ executable: String, _ arguments: [String]) throws -> (Int32, String) {
+    func run(_ executable: String, _ arguments: [String], localRoutes: [String] = []) throws -> (Int32, String) {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: executable)
         var arguments = arguments
@@ -48,17 +48,30 @@ struct Helper {
             // route monitor keep the one-shot request or daemon loop blocked.
             let source = try String(contentsOfFile: dependencies.quick, encoding: .utf8)
             let waitLine = "[[ -n $LAUNCHED_BY_LAUNCHD ]] && wait"
-            guard source.components(separatedBy: waitLine).count == 2 else {
+            let routeFunction = "add_route() {"
+            guard source.components(separatedBy: waitLine).count == 2,
+                  source.components(separatedBy: routeFunction).count == 2 else {
                 throw DeckError.message("This wg-quick version is not compatible with TunnelDeck supervision.")
             }
             let script = directory + "/supervised-wg-quick"
             if manager.fileExists(atPath: script) { try manager.removeItem(atPath: script) }
-            try write(Data(source.replacingOccurrences(of: waitLine, with: ": # supervised by TunnelDeck").utf8), to: script, mode: 0o600)
+            let bypass = """
+            add_route() {
+                local td_local_route
+                for td_local_route in ${TUNNELDECK_LOCAL_ROUTES:-}; do
+                    [[ "$1" == "$td_local_route" ]] && return 0
+                done
+            """
+            let supervised = source.replacingOccurrences(of: waitLine, with: ": # supervised by TunnelDeck")
+                .replacingOccurrences(of: routeFunction, with: bypass)
+            try write(Data(supervised.utf8), to: script, mode: 0o600)
             arguments[0] = script
         }
         task.arguments = arguments
         task.environment = ["PATH": "\(dependencies.prefix)/bin:/usr/bin:/bin:/usr/sbin:/sbin", "LC_ALL": "C", "HOME": "/var/root",
-                            "WG_QUICK_USERSPACE_IMPLEMENTATION": dependencies.go]
+                             "WG_QUICK_USERSPACE_IMPLEMENTATION": dependencies.go]
+        // Values originate exclusively from parsed/validated IPNetwork objects.
+        task.environment?["TUNNELDECK_LOCAL_ROUTES"] = localRoutes.joined(separator: " ")
         task.standardInput = FileHandle.nullDevice
         let pipe = Pipe()
         task.standardOutput = pipe
@@ -122,7 +135,8 @@ struct Helper {
             if manager.fileExists(atPath: configPath) { try manager.removeItem(atPath: configPath) }
             if manager.fileExists(atPath: statePath) { try manager.removeItem(atPath: statePath) }
             try write(Data(runtimeText.utf8), to: configPath, mode: 0o600)
-            let result = try run(dependencies.bash, [dependencies.quick, "up", configPath])
+            let localRoutes = configuration.routes.filter { routing.table.localRoute(covering: $0) != nil }.map(\.networkDescription)
+            let result = try run(dependencies.bash, [dependencies.quick, "up", configPath], localRoutes: localRoutes)
             guard result.0 == 0, let actual = realInterface() else {
                 // wg-quick may have created an interface before failing; request its normal cleanup.
                 if realInterface() != nil { _ = try? run(dependencies.bash, [dependencies.quick, "down", configPath]) }

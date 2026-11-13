@@ -49,6 +49,7 @@ extension Helper {
         var state = state
         let snapshot = try snapshot ?? RoutingSnapshot(helper: self)
         state.routeHealth = snapshot.health(configuration: try runtimeConfiguration(), interface: state.interface)
+        state.routeRecovery = RouteRecovery.status(for: state)
         return state
     }
 

@@ -8,6 +8,7 @@ enum OnDemandService {
     static let base = "/Library/Application Support/TunnelDeck"
 
     static func configure(helper: Helper, settings: OnDemandSettings) throws -> HelperResponse {
+        RouteRecovery.reset(owner: helper.owner, id: helper.request.id)
         try helper.ensureDirectory(base, mode: 0o755)
         try helper.ensureDirectory(OnDemandStatus.root, mode: 0o755)
         let directory = OnDemandStatus.root + "/\(helper.owner)"
@@ -90,7 +91,6 @@ enum OnDemandService {
 
     static func run() {
         var previousNetwork: [UUID: NetworkSnapshot] = [:]
-        var lastAttempt: [UUID: Date] = [:]
         while true {
             autoreleasepool {
                 // Same lock used by manual operations. Never race configuration,
@@ -103,13 +103,16 @@ enum OnDemandService {
                       info.st_mode & S_IFMT == S_IFREG, flock(lock, LOCK_EX | LOCK_NB) == 0 else { return }
                 defer { flock(lock, LOCK_UN) }
                 let snapshot = network()
+                RouteRecovery.run(snapshot: snapshot)
                 guard let enumerator = FileManager.default.enumerator(atPath: OnDemandStatus.root) else { return }
                 var present = Set<UUID>()
+                var activationKeys = Set<RouteRecovery.Key>()
                 while let relative = enumerator.nextObject() as? String {
                     guard relative.hasSuffix(".json"), !relative.hasSuffix(".status.json"),
                           let record = try? loadRecord(OnDemandStatus.root + "/" + relative), record.settings.enabled,
                           relative == "\(record.owner)/\(TunnelProfile.interfaceName(for: record.id)).json" else { continue }
                     present.insert(record.id)
+                    activationKeys.insert(RouteRecovery.Key(owner: record.owner, id: record.id))
                     let helper = Helper(owner: record.owner, request: HelperRequest(id: record.id, configuration: record.configuration))
                     do {
                         let changed = previousNetwork[record.id].map { $0 != snapshot } ?? false
@@ -119,8 +122,11 @@ enum OnDemandService {
                         // re-resolves endpoint hostnames after sleep/roaming.
                         if helper.realInterface() != nil && (!matches || changed) { _ = try helper.execute(action: "down") }
                         if matches, helper.realInterface() == nil {
-                            if !changed, let last = lastAttempt[record.id], Date().timeIntervalSince(last) < 30 { continue }
-                            lastAttempt[record.id] = Date()
+                            guard RouteRecovery.claimActivation(owner: record.owner, id: record.id) else {
+                                try writeStatus(OnDemandStatus(id: record.id, owner: record.owner, settings: record.settings,
+                                    message: RouteRecovery.activationMessage(owner: record.owner, id: record.id)), helper: helper)
+                                continue
+                            }
                             _ = try helper.execute(action: "up")
                         }
                         let message: String
@@ -130,12 +136,13 @@ enum OnDemandService {
                         } else { message = "Waiting for a matching network." }
                         try writeStatus(OnDemandStatus(id: record.id, owner: record.owner, settings: record.settings, message: message), helper: helper)
                     } catch {
-                        let message = (error as? DeckError)?.localizedDescription ?? "On-demand operation failed; it will retry automatically."
+                        let message = ((error as? DeckError)?.localizedDescription ?? "On-demand operation failed.") + " "
+                            + RouteRecovery.activationMessage(owner: record.owner, id: record.id)
                         try? writeStatus(OnDemandStatus(id: record.id, owner: record.owner, settings: record.settings, message: message), helper: helper)
                     }
                 }
                 previousNetwork = previousNetwork.filter { present.contains($0.key) }
-                lastAttempt = lastAttempt.filter { present.contains($0.key) }
+                RouteRecovery.activations = RouteRecovery.activations.filter { activationKeys.contains($0.key) }
             }
             Thread.sleep(forTimeInterval: 5)
         }

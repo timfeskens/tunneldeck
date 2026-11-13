@@ -110,7 +110,7 @@ final class ServiceSession: NSObject, TunnelServiceProtocol {
         RootService.queue.async {
             let response: HelperResponse
             do {
-                guard data.count <= 262_144, ["ping", "status", "up", "down", "stats", "on-demand", "repair-routes", "replace-configuration"].contains(action) else {
+                guard data.count <= 262_144, ["ping", "status", "up", "down", "stats", "on-demand", "repair-routes", "retry", "replace-configuration"].contains(action) else {
                     throw DeckError.message("Invalid service request.")
                 }
                 let request = try JSONDecoder().decode(HelperRequest.self, from: data)
@@ -132,6 +132,14 @@ final class ServiceSession: NSObject, TunnelServiceProtocol {
                             return HelperResponse(success: true, message: "Refreshed", runtimes: states)
                         }
                         let helper = Helper(owner: self.owner, request: request)
+                        if action == "retry" {
+                            RouteRecovery.reset(owner: self.owner, id: request.id)
+                            if helper.realInterface() != nil { return try helper.repairRoutes() }
+                            return try helper.execute(action: "up")
+                        }
+                        if action == "repair-routes" || action == "down" || action == "up" {
+                            RouteRecovery.reset(owner: self.owner, id: request.id)
+                        }
                         if action == "replace-configuration" { return try helper.replaceConfiguration() }
                         if action == "down", let settings = request.onDemand, !settings.enabled {
                             _ = try OnDemandService.configure(helper: helper, settings: settings)

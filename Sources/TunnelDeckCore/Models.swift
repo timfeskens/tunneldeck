@@ -60,6 +60,8 @@ public struct TunnelRuntime: Codable, Sendable {
     public var peers: [PeerStatistics]
     public var sampledAt: Date?
     public var routeHealth: RouteHealth?
+    public var routeRecovery: RouteRecoveryStatus?
+    public var needsRetry: Bool { routeHealth?.healthy != true }
     public init(id: UUID, owner: UInt32, interface: String, connectedAt: Date = Date(), peers: [PeerStatistics] = [], sampledAt: Date? = nil) {
         self.id = id
         self.owner = owner

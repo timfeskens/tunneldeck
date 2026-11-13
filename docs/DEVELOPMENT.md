@@ -28,7 +28,8 @@ codesigning`. Both app and helper are signed with the selected identity. Keep th
 same bundle ID and signing identity on subsequent builds to retain Keychain trust.
 Do not commit private keys/certificates or silently fall back when signing fails.
 Apple Development signing is for local development; it is not Developer ID
-distribution signing or notarization. Existing items may need a migration prompt.
+distribution signing or notarization. Existing items may need explicit per-tunnel
+**Repair Keychain Access…** after switching identities.
 
 The login-Keychain implementation uses macOS's legacy app-specific `SecAccess`
 ACL API, which is deprecated but needed for the current non-sandboxed, ad-hoc
@@ -36,6 +37,14 @@ distribution model. A data-protection Keychain migration requires a separate
 entitlement/provisioning/signing design. `LocalAuthentication` guards sensitive
 UI operations; it is not represented as cryptographic user-presence protection
 on the stored Keychain items.
+
+Normal `SecureStore` operations serialize and temporarily disable legacy login-
+Keychain interaction, restoring the previous process policy on success or failure.
+Permission repair is the only path that permits system Keychain dialogs; it never
+reads secret data interactively. Do not use a global secret cache to hide prompts.
+Connecting relies on the helper's locked runtime conflict checks, not reads of
+other profiles' saved secrets. Saving checks the editor's original text against
+a silent read to avoid overwriting a configuration changed by another instance.
 
 - `Sources/TunnelDeck`: SwiftUI app, Keychain storage, and service client.
 - `Sources/TunnelDeckCore`: configuration validation, ZIP import, routing models, and endpoint resolution.

@@ -1,4 +1,21 @@
-## New in v0.6.4
+## New in v0.6.5
+
+- Automatically repair missing routes after roaming, with a maximum of three
+  attempts and 5/15/30-second backoff. Recovery runs in the root service even when
+  the app is closed, preserves other VPNs, and reports exhausted retries.
+- Clicking an active tunnel with unhealthy/unknown routes now retries repair
+  instead of disconnecting it. Disconnect remains a separate explicit action.
+- On-demand activation failures now have a bounded retry budget too.
+- Preserve fully covered directly connected Wi-Fi/Ethernet destinations as local
+  LAN bypasses. The app identifies that traffic is not using the VPN; saved
+  AllowedIPs remain unchanged for connection away from the LAN.
+- Stop cascading Keychain permission dialogs: routine access is noninteractive,
+  permission repair is explicit per tunnel, and connecting no longer reads other
+  profiles' secrets. Touch ID still guards editing, revealing and export.
+- The installed local build can use the selected stable Apple Development
+  signing identity; public releases remain ad-hoc signed and not notarized.
+
+## Previous release: v0.6.4
 
 This release includes the connected-editing and authentication changes planned
 for v0.6.3, whose release build failed before publication. The bundled Bash build

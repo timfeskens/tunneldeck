@@ -120,9 +120,13 @@ struct MenuContents: View {
             Button {
                 store.toggle(profile)
             } label: {
-                Label(profile.name + " — " + store.statusTitle(profile.id), systemImage: store.runtime[profile.id] == nil ? "circle" : store.runtime[profile.id]?.routeHealth?.healthy == true ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                Label(profile.name + " — " + store.statusTitle(profile.id) + (store.runtime[profile.id]?.needsRetry == true ? " — Retry" : ""), systemImage: store.runtime[profile.id] == nil ? "circle" : store.runtime[profile.id]?.routeHealth?.healthy == true ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
             }
             .disabled(store.busy != nil || !store.dependencies.missing.isEmpty)
+            if store.runtime[profile.id]?.needsRetry == true {
+                Button("Disconnect \(profile.name)") { store.disconnect(profile) }
+                    .disabled(store.busy != nil || store.installingService)
+            }
         }
         Divider()
         Button("Manage Tunnels…") {

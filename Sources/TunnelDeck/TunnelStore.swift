@@ -116,7 +116,7 @@ final class TunnelStore: ObservableObject {
         selection = prepared.first?.0.id ?? selection
     }
 
-    func save(name: String, text: String, editing: TunnelProfile?) async throws {
+    func save(name: String, text: String, editing: TunnelProfile?, originalText: String?) async throws {
         guard storageAvailable else { throw DeckError.message("Profile storage could not be loaded. Saving is disabled to protect existing data.") }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed.count <= 80 else { throw DeckError.message("Enter a tunnel name of 1–80 characters.") }
@@ -126,14 +126,17 @@ final class TunnelStore: ObservableObject {
         guard !profiles.contains(where: { $0.id != profile.id && $0.interfaceName == profile.interfaceName }) else {
             throw DeckError.message("Tunnel identifier collision; please try adding it again.")
         }
-        let previousText = editing != nil ? try SecureStore.read(profile.id) : nil
+        let previousText = editing != nil ? originalText : nil
+        guard editing == nil || previousText != nil else { throw DeckError.message("Reopen the editor before saving this tunnel.") }
         let previousProfiles = profiles
         // Let the service decide whether the tunnel is active under its lock;
         // the UI's most recent status sample can be stale (on-demand/other app).
         let needsServiceUpdate = editing != nil
         busy = profile.id
         defer { busy = nil; refresh(); refreshFromService() }
-        try SecureStore.save(text, id: profile.id)
+        // Verify the original editor snapshot during the silent write check;
+        // use that same snapshot for rollback without a separate secret read.
+        try SecureStore.save(text, id: profile.id, replacing: previousText)
         var updated = profiles
         if let index = updated.firstIndex(where: { $0.id == profile.id }) { updated[index] = profile }
         else { updated.append(profile) }
@@ -228,20 +231,33 @@ final class TunnelStore: ObservableObject {
         guard busy == nil, !installingService else { return }
         refresh()
         let connected = runtime[profile.id] != nil
+        if runtime[profile.id]?.needsRetry == true {
+            perform(profile, action: "retry", text: nil)
+            return
+        }
         do {
             let text = connected ? nil : try SecureStore.read(profile.id)
-            if let text {
-                let config = try WireGuardConfiguration(text: text)
-                for other in profiles where other.id != profile.id && runtime[other.id] != nil {
-                    let otherConfig = try WireGuardConfiguration(text: SecureStore.read(other.id))
-                    guard !config.conflicts(with: otherConfig) else {
-                        throw DeckError.message("This tunnel overlaps with “\(other.name)”. Disconnect it or edit the routes first.")
-                    }
-                }
-            }
+            // The service checks actual runtime configurations under its lock,
+            // across all users. Do not read other profiles' Keychain secrets.
             let disable = connected && onDemand[profile.id]?.settings.enabled == true ? OnDemandSettings(enabled: false) : nil
             perform(profile, action: connected ? "down" : "up", text: text, settings: disable)
         } catch { self.error = error.localizedDescription }
+    }
+
+    func disconnect(_ profile: TunnelProfile) {
+        guard busy == nil, !installingService, runtime[profile.id] != nil else { return }
+        let settings = onDemand[profile.id]?.settings.enabled == true ? OnDemandSettings(enabled: false) : nil
+        perform(profile, action: "down", text: nil, settings: settings)
+    }
+
+    func repairKeychainAccess(_ profile: TunnelProfile) async throws {
+        guard busy == nil, !installingService else { throw DeckError.message("Wait for the current operation to finish.") }
+        busy = profile.id
+        defer { busy = nil }
+        // No LocalAuthentication here: this operation does not disclose a key,
+        // and Keychain itself authorizes the ACL change. Do not stack prompts.
+        try await Task.detached(priority: .userInitiated) { try SecureStore.repairAccess(profile.id) }.value
+        _ = try SecureStore.read(profile.id) // verify silently; never retry interactively
     }
 
     func statistics(_ profile: TunnelProfile) {

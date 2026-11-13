@@ -33,11 +33,22 @@ Routine statistics and the background on-demand loop do not request biometric
 authentication. This is an app-level authentication gate, not a biometric access
 control on each Keychain item.
 
-Keychain entries trust the app explicitly, not all applications. Existing entries
-are migrated in place after a successful read; macOS may request permission once
-during migration. Ad-hoc signatures change between builds, so a future ad-hoc
-update can still trigger Keychain permission dialogs. Touch ID does not override
-those dialogs. Stable signing is needed to retain trust across builds.
+Keychain entries trust the app explicitly, not all applications. Normal reads,
+saves and removals never open Keychain permission dialogs or migrate permissions.
+If access is denied or the login Keychain is locked, the operation stops with
+guidance instead of opening a series of password prompts.
+
+Unlock your login Keychain if needed, select the affected tunnel, then choose
+**Repair Keychain Access…**. Confirm the explanation and approve macOS's Keychain
+permission request. This explicitly updates only that item's application ACL in
+place; it does not replace keys or reconnect the tunnel. Repair does not add a
+separate Touch ID prompt. Cancel stops without an automatic retry. Repeat only
+for other profiles that need repair, then retry your original action.
+
+Ad-hoc signatures change between builds, so future public-release updates may
+require explicit repair again. Stable local signing with the same bundle ID and
+identity preserves app trust across rebuilds; switching signing identities may
+still require repair. Touch ID does not override Keychain's permission decisions.
 
 Before migrating a profile from another app, deactivate its old copy **and disable
 its on-demand rule**. Never activate the same client keys/profile in two apps at once.
@@ -67,8 +78,9 @@ disconnecting them. Exporting never changes configurations or connection state.
 it in a secure location and do not attach it to a public issue. The archive and
 its staging file are written with owner-only permissions; copying it elsewhere,
 cloud sync or a filesystem without Unix permissions can change that protection.
-Exporting first requires Touch ID or your Mac login password, and macOS may also
-request Keychain permission during migration or after an ad-hoc app update.
+Exporting first requires Touch ID or your Mac login password. If a selected
+profile needs Keychain repair, export stops without opening Keychain dialogs;
+repair the affected profile and retry.
 
 Each selected tunnel becomes one `.conf` file, compatible with TunnelDeck's ZIP
 import and standard WireGuard tools. Unsafe filename characters are replaced;
@@ -94,6 +106,42 @@ listed networks. SSIDs are exact and case-sensitive.
 On-demand activation is not a kill switch, internet-reachability check, or handshake watchdog.
 
 ## Route warnings and repair
+
+When a configured destination is fully covered by a directly connected Wi-Fi or
+Ethernet subnet, TunnelDeck preserves that LAN route instead of installing the
+VPN route. For example, N150's home-LAN routes use Wi-Fi while you are at home.
+The app shows **Active — local LAN bypass** and lists the bypassed destinations;
+those destinations are **not encrypted through the VPN**. Saved AllowedIPs are
+unchanged, so they use the VPN again when connecting away from that subnet.
+TunnelDeck cannot distinguish home from an unrelated LAN with the same subnet.
+
+Only full coverage by a directly attached `en` interface qualifies. Partial
+overlap, routes through a gateway, and competing VPN routes are not silently
+bypassed. Duplicate VPN interface addresses remain blocked. On-demand tunnels
+reconnect on physical-network changes; manually managed tunnels may need a
+reconnect if their peer is unreachable. Missing routes are repaired automatically
+as described below, including for manually activated tunnels.
+
+### Automatic recovery and manual retry
+
+The root service checks active tunnels while the app is closed as well. On a
+stable reachable network, missing routes are retried at most **three times per
+tunnel and network/connection**, with delays of **5, 15 and 30 seconds**. The
+five-second service loop and network-settling period can add delay. Successful
+repairs do not reset the budget, preventing endless repair loops when routes flap.
+Conflicts or duplicate VPN addresses block repair without taking routes from
+another interface. Network loss pauses recovery. A network change, a new
+connection, or an explicit retry starts a fresh budget. Service restart also
+clears the in-memory retry state. On-demand connection attempts use the same
+three-attempt/backoff limit rather than retrying indefinitely.
+
+An active tunnel with unknown/unhealthy routes uses **Retry Connection**, not
+Disconnect, as its primary action in the window and menu bar. Retry inspects and
+repairs the existing interface without disabling on-demand. A separate
+**Disconnect** action remains available to stop the tunnel and disable its rule.
+When the budget is exhausted, the app explains that manual retry is needed.
+Route recovery does not establish peer reachability and does not reconnect a
+healthy-looking interface solely because it has no recent handshake.
 
 An interface being up does not prove traffic reaches its destination. TunnelDeck
 checks missing/conflicting routes and duplicate interface addresses and displays
@@ -129,8 +177,9 @@ releases are ad-hoc signed, not Developer ID signed or notarized.
   full-tunnel VPN or kill switch; do not use broad routes to bypass that limit.
 - **System DNS is preserved.** Imported `DNS` values are not applied. Private
   names need an existing resolver that can answer them; scoped DNS is not implemented.
-- **Disjoint networks required.** Overlapping routes/interface networks between
-  TunnelDeck tunnels are blocked. Other VPNs and local network routes may also conflict.
+- **Disjoint VPN networks required.** Overlapping routes/interface networks between
+  TunnelDeck tunnels are blocked. Fully covered directly connected LAN destinations
+  are bypassed as described above; other overlapping routes remain conflicts.
 - **IPv4-preferred hostname endpoints.** Names are resolved again on connection
   and reconnect. IPv6-only names and explicit IPv6 endpoints remain supported.
   This is not application-health failover or automatic MTU discovery.

@@ -13,6 +13,17 @@ public struct IPNetwork: Hashable, Sendable, CustomStringConvertible {
     public let prefix: Int
     public let address: String
     public var description: String { "\(address)/\(prefix)" }
+    /// WireGuard canonicalizes AllowedIPs before wg-quick enumerates routes.
+    public var networkDescription: String {
+        var network = bytes
+        for index in network.indices {
+            let bits = max(0, min(8, prefix - index * 8))
+            network[index] &= bits == 0 ? 0 : UInt8(0xff << (8 - bits) & 0xff)
+        }
+        var text = [CChar](repeating: 0, count: Int(INET6_ADDRSTRLEN))
+        _ = inet_ntop(bytes.count == 4 ? AF_INET : AF_INET6, &network, &text, socklen_t(text.count))
+        return "\(String(cString: text))/\(prefix)"
+    }
 
     public init(_ text: String, requirePrefix: Bool = true) throws {
         let parts = text.split(separator: "/", omittingEmptySubsequences: false)
