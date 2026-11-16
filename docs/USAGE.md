@@ -39,11 +39,28 @@ If access is denied or the login Keychain is locked, the operation stops with
 guidance instead of opening a series of password prompts.
 
 Unlock your login Keychain if needed, select the affected tunnel, then choose
-**Repair Keychain Access…**. Confirm the explanation and approve macOS's Keychain
-permission request. This explicitly updates only that item's application ACL in
-place; it does not replace keys or reconnect the tunnel. Repair does not add a
-separate Touch ID prompt. Cancel stops without an automatic retry. Repeat only
-for other profiles that need repair, then retry your original action.
+**Repair Keychain Access…**. This button appears only when a silent access check
+of the selected tunnel confirms that authorization is needed. It is hidden for
+readable configurations, missing entries, and unrelated Keychain errors. Access
+is rechecked on selection, app activation, and after actions; successful repair
+hides the button. These checks never prompt or read other tunnels' configurations.
+Confirm the explanation, then approve the **macOS**
+Keychain request using **Always Allow**, not the one-time **Allow** button.
+Enter your Keychain password only in the macOS prompt, never in chat. TunnelDeck
+does not collect it. macOS may request app-trust and signing-partition approval
+separately. Repair performs one interactive read for this profile, discards the
+returned configuration without displaying or exporting it, and verifies a second
+read with interaction disabled. It never loops or retries authorization.
+
+Old ad-hoc builds can leave hash-only signing permissions behind even after the
+app switches to stable signing. macOS's read-authorization flow can persist the
+current app and signing partition through Always Allow. Direct ACL rewrites and
+the private password-authorized API are not used: both failed for affected entries.
+Repair never deletes or replaces entries, changes keys, or reconnects a tunnel.
+A `-25293` denial does not prove a wrong password or locked Keychain. Cancel stops
+without an automatic retry. A one-time approval that does not survive the silent
+check is reported as such, not as a successful repair. Repeat only for other
+profiles that need repair, then retry your original action.
 
 Ad-hoc signatures change between builds, so future public-release updates may
 require explicit repair again. Stable local signing with the same bundle ID and

@@ -345,12 +345,24 @@ private struct TunnelDetails: View {
                     Spacer()
                     Button("Edit…", action: edit).disabled(store.busy != nil || store.installingService)
                 }
-                Button("Repair Keychain Access…") { confirmKeychainRepair = true }
-                    .disabled(store.busy != nil || store.installingService)
+                if store.keychainAccessNeedsRepair.contains(profile.id) {
+                    Button("Repair Keychain Access…") { confirmKeychainRepair = true }
+                        .disabled(store.busy != nil || store.installingService)
+                }
                 Text("If this profile also exists in the official WireGuard app, leave that copy inactive. The official app can disconnect its own other tunnel when you activate a profile there.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             .padding(24)
+        }
+        .task(id: profile.id) { await store.refreshSelectedKeychainAccess() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await store.refreshSelectedKeychainAccess() }
+        }
+        .onChange(of: store.busy) { _, busy in
+            if busy == nil { Task { await store.refreshSelectedKeychainAccess() } }
+        }
+        .onChange(of: store.installingService) { _, installing in
+            if !installing { Task { await store.refreshSelectedKeychainAccess() } }
         }
         .sheet(isPresented: $showOnDemand) {
             OnDemandEditor(store: store, profile: profile, settings: store.onDemand[profile.id]?.settings ?? OnDemandSettings())
@@ -358,12 +370,12 @@ private struct TunnelDetails: View {
         .confirmationDialog("Repair Keychain access for this tunnel?", isPresented: $confirmKeychainRepair) {
             Button("Repair Access") {
                 Task { @MainActor in
-                    do { try await store.repairKeychainAccess(profile); keychainRepaired = true }
+                    do { keychainRepaired = try await store.repairKeychainAccess(profile) }
                     catch { store.error = error.localizedDescription }
                 }
             }
         } message: {
-            Text("macOS may ask for your login-Keychain password to trust this app. Only this tunnel’s app permissions are updated; its keys and connection are not changed. Cancel stops the repair without an automatic retry.")
+            Text("macOS will request access to this tunnel’s saved configuration. Enter your Keychain password only in the macOS prompt and choose Always Allow, not Allow, to retain permission. macOS may authorize app trust and signing separately. TunnelDeck does not collect your password, rewrite permissions itself, replace keys, or reconnect. Cancel stops without an automatic retry.")
         }
         .alert("Keychain access repaired", isPresented: $keychainRepaired) {
             Button("OK", role: .cancel) {}

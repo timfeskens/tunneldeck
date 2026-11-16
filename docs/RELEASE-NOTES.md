@@ -1,5 +1,14 @@
 ## New in v0.6.5
 
+- Local build 16: show Repair Keychain Access only after a silent selected-tunnel
+  check confirms an authorization failure; hide it after verified repair. Recheck
+  when selecting a tunnel, returning to the app, and completing actions. Missing
+  entries and unrelated Keychain errors do not offer permission repair.
+- Replace the failed direct-ACL/password-authorized repair with
+  one explicit Keychain read. Use macOS's Always Allow authorization flow, then
+  verify access silently. Remove the app-owned password field and private API;
+  preserve saved entries and keep routine reads noninteractive.
+
 - Automatically repair missing routes after roaming, with a maximum of three
   attempts and 5/15/30-second backoff. Recovery runs in the root service even when
   the app is closed, preserves other VPNs, and reports exhausted retries.

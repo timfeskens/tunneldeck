@@ -7,15 +7,21 @@ final class TunnelStore: ObservableObject {
     @Published private(set) var profiles: [TunnelProfile] = []
     @Published private(set) var runtime: [UUID: TunnelRuntime] = [:]
     @Published private(set) var onDemand: [UUID: OnDemandStatus] = [:]
+    @Published private(set) var keychainAccessNeedsRepair: Set<UUID> = []
     @Published var selection: UUID?
-    @Published var busy: UUID?
-    @Published var error: String?
+    @Published var busy: UUID? {
+        didSet { keychainAccessCheck = UUID() }
+    }
+    @Published var error: String? {
+        didSet { Task { await refreshSelectedKeychainAccess() } }
+    }
     @Published private(set) var serviceReady = false
     @Published var installingService = false
     let dependencies = Dependencies.detect()
     private var timer: Timer?
     private var storageAvailable = true
     private var refreshingService = false
+    private var keychainAccessCheck = UUID()
     private let metadataURL: URL
 
     init() {
@@ -62,6 +68,17 @@ final class TunnelStore: ObservableObject {
     }
 
     func configuration(for profile: TunnelProfile) throws -> String { try SecureStore.read(profile.id) }
+
+    func refreshSelectedKeychainAccess() async {
+        guard let id = selection, busy == nil, !installingService else { return }
+        let check = UUID()
+        keychainAccessCheck = check
+        let status = await Task.detached(priority: .utility) { try? SecureStore.accessStatus(id) }.value
+        guard !Task.isCancelled, keychainAccessCheck == check, selection == id,
+              busy == nil, !installingService else { return }
+        if status == .authorizationRequired { keychainAccessNeedsRepair.insert(id) }
+        else { keychainAccessNeedsRepair.remove(id) }
+    }
 
     func exportArchive(selecting ids: Set<UUID>) throws -> Data {
         guard busy == nil, !installingService else { throw DeckError.message("Wait for the current operation to finish.") }
@@ -250,14 +267,16 @@ final class TunnelStore: ObservableObject {
         perform(profile, action: "down", text: nil, settings: settings)
     }
 
-    func repairKeychainAccess(_ profile: TunnelProfile) async throws {
+    func repairKeychainAccess(_ profile: TunnelProfile) async throws -> Bool {
         guard busy == nil, !installingService else { throw DeckError.message("Wait for the current operation to finish.") }
+        keychainAccessCheck = UUID()
         busy = profile.id
         defer { busy = nil }
-        // No LocalAuthentication here: this operation does not disclose a key,
-        // and Keychain itself authorizes the ACL change. Do not stack prompts.
-        try await Task.detached(priority: .userInitiated) { try SecureStore.repairAccess(profile.id) }.value
-        _ = try SecureStore.read(profile.id) // verify silently; never retry interactively
+        try await Task.detached(priority: .userInitiated) {
+            try SecureStore.repairAccess(profile.id)
+        }.value
+        keychainAccessNeedsRepair.remove(profile.id)
+        return true
     }
 
     func statistics(_ profile: TunnelProfile) {

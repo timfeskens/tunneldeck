@@ -6,10 +6,14 @@ enum SecureStore {
     private static let service = "codes.savvy.tunneldeck.configuration"
     private static let interactionLock = NSLock()
 
+    enum AccessStatus: Sendable {
+        case accessible, authorizationRequired, missing, unavailable
+    }
+
     // The login Keychain does not consistently honor kSecUseAuthenticationUI
     // for legacy ACLs. Suppress its dialogs explicitly as well. The setting is
     // process-wide, so serialize our calls and always restore its prior value.
-    // Only the explicit repair action may permit Keychain interaction.
+    // Only the user-requested repair read may permit Keychain dialogs.
     private static func withInteraction<T>(_ allowed: Bool = false, _ body: () throws -> T) throws -> T {
         interactionLock.lock()
         defer { interactionLock.unlock() }
@@ -23,7 +27,18 @@ enum SecureStore {
     }
 
     private static func accessError(_ status: OSStatus) -> DeckError {
-        DeckError.message("Cannot access this configuration in Keychain (\(status)). Unlock your login Keychain if needed, then select the tunnel and choose Repair Keychain Access…. No automatic permission prompts were opened.")
+        let reason: String
+        switch status {
+        case errSecAuthFailed:
+            reason = "Keychain did not authorize this app to access the saved configuration. An older TunnelDeck build may still own its permissions; this does not necessarily mean your password is wrong."
+        case errSecInteractionNotAllowed, errSecInteractionRequired:
+            reason = "Keychain requires authorization or is locked."
+        case errSecItemNotFound:
+            return DeckError.message("This tunnel's configuration was not found in Keychain. Access repair cannot restore a missing entry; import the original configuration to recover it.")
+        default:
+            return DeckError.message("Cannot access this configuration in Keychain (\(status)). Try again after checking Keychain availability. Permission repair is offered only when authorization is required.")
+        }
+        return DeckError.message("\(reason) Select the tunnel and choose Repair Keychain Access…. Routine operations never open permission prompts.")
     }
 
     private static func query(_ id: UUID) -> [String: Any] {
@@ -44,25 +59,38 @@ enum SecureStore {
     }
 
     /// User-initiated permission repair, never invoked by read/save/connect.
-    /// Updates only the ACL in place, not the secret or its persistent identity.
+    /// A read lets securityd authorize and persist both app trust and its signing
+    /// partition through Always Allow. Direct ACL writes cannot do that reliably.
     static func repairAccess(_ id: UUID) throws {
         try withInteraction(true) {
-            var attributes = query(id)
-            attributes[kSecReturnRef as String] = true
-            attributes[kSecMatchLimit as String] = kSecMatchLimitOne
-            var result: CFTypeRef?
-            let status = SecItemCopyMatching(attributes as CFDictionary, &result)
-            guard status == errSecSuccess, let result else { throw accessError(status) }
-            let item = result as! SecKeychainItem
-            let update = SecKeychainItemSetAccess(item, try appAccess())
-            guard update == errSecSuccess else {
-                throw DeckError.message("Keychain access repair was cancelled or failed (\(update)). The configuration was not deleted or replaced.")
+            let (status, result) = copySecret(id)
+            guard status == errSecSuccess, result is Data else {
+                if status == errSecUserCanceled { throw DeckError.message("Keychain authorization was cancelled. No automatic retry was made.") }
+                throw DeckError.message("macOS did not authorize this configuration (\(status)). The saved configuration was not deleted or replaced. No automatic retry was made.")
+            }
+        }
+        try withInteraction {
+            let (status, result) = copySecret(id)
+            guard status == errSecSuccess, result is Data else {
+                throw DeckError.message("macOS allowed access once but did not retain permission. During Repair Keychain Access, choose Always Allow rather than Allow. No automatic retry was made and the configuration was preserved.")
             }
         }
     }
 
     static func read(_ id: UUID) throws -> String {
         try withInteraction { try readWithoutInteraction(id) }
+    }
+
+    static func accessStatus(_ id: UUID) throws -> AccessStatus {
+        try withInteraction {
+            let (status, result) = copySecret(id)
+            switch status {
+            case errSecSuccess: return result is Data ? .accessible : .unavailable
+            case errSecAuthFailed, errSecInteractionNotAllowed, errSecInteractionRequired: return .authorizationRequired
+            case errSecItemNotFound: return .missing
+            default: return .unavailable
+            }
+        }
     }
 
     private static func readWithoutInteraction(_ id: UUID) throws -> String {

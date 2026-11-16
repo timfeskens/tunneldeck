@@ -32,10 +32,14 @@ Interactive editing, revealing keys and export require LocalAuthentication
 (Touch ID or Mac login password). This is an app-level disclosure gate, not a
 biometric Keychain ACL. Saved configurations explicitly trust the signed app,
 never every application. Normal Keychain operations suppress interactive system
-permission dialogs and never change ACLs. Explicit per-tunnel **Repair Keychain
-Access…** permits macOS to authorize an in-place ACL update without disclosing or
-replacing the secret. Cancellation does not trigger retries. Writes and removals
-verify decrypt access noninteractively before mutating existing items. Ad-hoc
+permission dialogs and never change ACLs. Silent selected-profile access checks
+discard the returned data without displaying or exporting it. Only a confirmed
+authorization failure shows **Repair Keychain Access…**; missing entries and
+unrelated errors do not. Explicit repair performs one interactive read so macOS
+can retain app/signing permission through **Always Allow**, followed by a silent
+verification read. It never directly rewrites ACLs, collects a Keychain password,
+or deletes or replaces the secret. Cancellation does not trigger retries. Writes
+and removals verify decrypt access noninteractively before mutating existing items. Ad-hoc
 rebuilds can require repair again. Stable signing is needed to preserve trust.
 
 Connected edits reconnect only the selected tunnel under the shared operation
